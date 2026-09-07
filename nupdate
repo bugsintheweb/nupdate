@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+
+# Nupdate: update git, flake, and rebuild, with clear terminal output.
+
+set -Eeuo pipefail
+
+errlog="$HOME/.cache/nupdate-errors-$(date +%F_%H-%M-%S).log"
+
+# Colors for readable status messages.
+red="\033[0;31m"
+green="\033[0;32m"
+yellow="\033[1;33m"
+blue="\033[0;34m"
+reset="\033[0m"
+
+# Print a message in color.
+info()  { printf "%b%s%b\n" "$blue"   "$1" "$reset"; }
+ok()    { printf "%b%s%b\n" "$green"  "$1" "$reset"; }
+warn()  { printf "%b%s%b\n" "$yellow" "$1" "$reset"; }
+err()   { printf "%b%s%b\n" "$red"    "$1" "$reset"; }
+
+# If anything fails, show the error, write details to the log, and wait for Enter.
+on_error() {
+  local exit_code=$?
+  err "Error: command failed (exit code $exit_code)."
+  err "See: $errlog"
+  {
+    echo "----- $(date) -----"
+    echo "Failed at line: $1"
+    echo "Exit code: $exit_code"
+  } >> "$errlog"
+  read -rp "Press Enter to exit..." _
+  exit "$exit_code"
+}
+
+# Trap errors and send the failing line number to on_error.
+trap 'on_error $LINENO' ERR
+
+# Helper: run a command after cd'ing into the nix_folder so output is normal and relative paths work.
+run_in_nix_folder() {
+  cd "$nix_folder"
+  "$@"
+}
+
+info "Starting Nix Update..."
+
+read -rp "Enter Nix folder path: " nix_folder
+if [[ -z "$nix_folder" ]]; then
+  err "Nix folder path is required."
+  exit 1
+fi
+ 
+warn "Updating flake..."
+run_in_nix_folder nix flake update
+
+warn "Updating git index..."
+run_in_nix_folder git add -A
+
+warn "Enter commit message:"
+read -rp "> " commit_msg
+
+warn "Creating commit..."
+run_in_nix_folder git commit -m "$commit_msg"
+
+warn "Pushing changes..."
+run_in_nix_folder git push
+
+warn "Rebuilding NixOS..."
+sudo nixos-rebuild switch --flake "$nix_folder"
+
+ok "All done."
+
+read -rp "Press Enter to exit..." _
