@@ -44,7 +44,7 @@ run_in_nix_folder() {
 
 info "Starting Nix Update..."
 
-read -rp "Enter Nix folder path: " nix_folder
+read -rp "Enter Nix absolute folder path: " nix_folder
 if [[ -z "$nix_folder" ]]; then
   err "Nix folder path is required."
   exit 1
@@ -66,7 +66,7 @@ warn "Pushing changes..."
 run_in_nix_folder git push
 
 warn "Rebuilding NixOS..."
-sudo nixos-rebuild switch --flake "$nix_folder"
+sudo nixos-rebuild switch --flake "$nix_folder#$(hostname)"
 
 ok "All done."
 
